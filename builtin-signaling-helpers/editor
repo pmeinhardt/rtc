@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage="Usage: tty <send|recv>"
+
+if [ $# -lt 1 ]; then
+  echo "$usage"
+  exit 1
+fi
+
+case "$1" in
+  send)
+    tmp=$(mktemp)
+
+    {
+      printf "Copy this value and send it to your peer over a secure channel:\n\n"
+      cat -
+      printf "\n\nThen close the editor."
+    } > "$tmp"
+
+    $EDITOR "$tmp" < /dev/tty &> /dev/tty || exit "$?"
+
+    rm "$tmp"
+    ;;
+  recv)
+    tmp=$(mktemp)
+    printf "Paste the received value here, then save and close the editor." > "$tmp"
+    $EDITOR "$tmp" < /dev/tty &> /dev/tty
+    cat "$tmp"
+    rm "$tmp"
+    ;;
+  *)
+    echo "$usage"
+    exit 1
+    ;;
+esac

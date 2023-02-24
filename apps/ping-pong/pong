@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+while read -r message; do
+  echo "< $message" > /dev/tty
+  response=$(echo "$message" | tr "i" "o")
+  printf "> " > /dev/tty
+  echo "$response" | tee /dev/tty
+done

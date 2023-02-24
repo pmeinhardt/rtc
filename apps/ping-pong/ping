@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+while true; do
+  printf "> " > /dev/tty
+  echo "ping" | tee /dev/tty
+  read -r message
+  echo "< $message" > /dev/tty
+  sleep 2
+done
