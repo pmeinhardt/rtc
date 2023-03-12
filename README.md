@@ -1,41 +1,59 @@
 # rtc
 
+*Note: This is still in a very early stage ⚠️*
+
 ```txt
       ╭────────────╮ ╔═══════|~|══════╗ ╭────────────╮
       │ stdin      │ ║    signaling   ║ │      stdin │
       ▼            │ ▽                ▽ │            ▼
   client-1        rtc ◁══════════════▷ rtc       client-2
       │            ▲                    ▲            │
-      │ stdout+err │   RTCDataChannel   │ stdout+err │
+      │ stdout     │   RTCDataChannel   │     stdout │
       ╰────────────╯                    ╰────────────╯
 ```
+
+## Usage
 
 ```shell
 rtc init [command [arg ...]]
 rtc join [command [arg ...]]
 rtc web
-
-stdin (0) -> rtc -> stdout (1)
-                 -> stderr (2)
-
-signal send < sdp
-signal recv > sdp
 ```
+
+## Apps
+
+### Chat
+
+Build:
 
 ```shell
-rtc init nchat
-rtc join nchat
+(cd apps/chat && go build .)
 ```
 
-Ideas:
+Use:
 
-- [ ] Raw version with session info (encoded as text) exchanged over separate channel (SMS, Signal, Slack, email, …)
+```shell
+rtc init ./apps/chat/chat # initiate connection
+rtc join ./apps/chat/chat # join on the other side
+```
+
+## Signaling plugins
+
+For exchanging SDP offer and answer through different channels…
+
+Commands should support `send` and `recv` subcommands.
+Commands should block until done.
+
+```shell
+signal send < sdp # send SDP received on stdin
+signal recv > sdp # receive SDP and print to stdout
+```
+
+## Ideas
+
+- [ ] Exchange SDP offer/answer via SMS, Signal, Slack, email, …
 - [ ] Adapter for exchanging session info based on GitHub user names (encrypt SDP via SSH public key + signing)
-- [ ] Other SDP exchange channels via add-on tools
 - [ ] Web-client interface (static HTML + JS) for non-technical users (send and or receive)
-- [ ] Demo apps?
-- [ ] Chat
-- [ ] Game
 
 ## References
 
