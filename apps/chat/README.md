@@ -1,6 +1,13 @@
 # Chat 📬
 
-TODO: Create a client app which renders to TTY and reads user input, reads incoming messages from stdin, writes outgoing messages from the user to stdout.
+On one client, initiate a connection with:
 
-For the TUI, something like this would be neat:
-https://github.com/charmbracelet/bubbletea/tree/master/examples/chat
+```shell
+rtc init ./chat
+```
+
+On the other, join with:
+
+```shell
+rtc join ./chat
+```
