@@ -3,14 +3,16 @@
 *Note: This is still in a very early stage ⚠️*
 
 ```txt
-      ╭────────────╮ ╔═══════|~|══════╗ ╭────────────╮
-      │ stdin      │ ║    signaling   ║ │      stdin │
-      ▼            │ ▽                ▽ │            ▼
-  client-1        rtc ◁══════════════▷ rtc       client-2
-      │            ▲                    ▲            │
-      │ stdout     │   RTCDataChannel   │     stdout │
-      ╰────────────╯                    ╰────────────╯
+  ╭────────────╮ ╔═══════|~|══════╗ ╭────────────╮
+  │ stdin      │ ║    signaling   ║ │      stdin │
+  ▼            │ ▽                ▽ │            ▼
+app-1         rtc ◁══════════════▷ rtc         app-2
+  │            ▲                    ▲            │
+  │ stdout     │   RTCDataChannel   │     stdout │
+  ╰────────────╯                    ╰────────────╯
 ```
+
+TODO: What about app stderr?
 
 ## Usage
 

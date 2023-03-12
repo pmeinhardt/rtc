@@ -16,14 +16,12 @@ import (
 
 func main() {
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0644)
-
-	lipgloss.SetColorProfile(termenv.NewOutput(tty).EnvColorProfile())
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	p := tea.NewProgram(initialModel(), tea.WithInput(tty), tea.WithOutput(tty))
+	lipgloss.SetColorProfile(termenv.NewOutput(tty).EnvColorProfile())
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)

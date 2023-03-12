@@ -1,106 +1,99 @@
 package cli
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 
-	"github.com/pmeinhardt/rtc/connection"
+	"github.com/pmeinhardt/rtc/session"
 	"github.com/pmeinhardt/rtc/signaling"
 	// "github.com/pmeinhardt/rtc/web"
 
-	"github.com/pion/webrtc/v3"
 	"github.com/spf13/cobra"
 )
 
 var (
+	sign         = "./signaling-plugins/editor"
+	port  uint16 = 8000
 	quiet bool
-	port  uint16
 )
 
-var params = connection.Params{
-	URLs: []string{"stun:stun.l.google.com:19302"},
-}
-
 var initialize = &cobra.Command{
-	Use:   "init [flags] [command [args ...]]",
+	Use:   "init [flags] command [args ...]",
 	Short: "Set up a new peer connection",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		var ccmd *exec.Cmd
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		var params = session.Params{}
 
-		if len(args) > 0 {
-			ccmd = exec.Command(args[0])
-		} else {
-			ccmd = exec.Command("cat")
-		}
+		signal := signaling.NewCommandTransport[session.Description](sign)
 
-		sig := signaling.NewCommandTransport("./builtin-signaling-helpers/editor")
-		signals := make(chan webrtc.SessionDescription)
+		s := session.NewSession(params)
+		defer s.Close()
 
-		go connection.Init(ccmd, params, signals)
-
-		offer := <-signals
-
-		err = sig.Send(&offer)
+		offer, err := s.Initiate()
 		if err != nil {
-			return err
+			panic(err)
 		}
 
-		answer, err := sig.Receive()
+		if err := signal.Send(*offer); err != nil {
+			panic(err)
+		}
+
+		answer, err := signal.Receive()
 		if err != nil {
-			return err
+			panic(err)
 		}
 
-		signals <- *answer
+		if err := s.Accept(*answer); err != nil {
+			panic(err)
+		}
 
-		select {} // block
+		// TODO: Synchronize and do not write before peer signal.Send has finished/peer is attached
+		// Peer needs to signal readiness
 
-		// return nil
+		if err := s.Attach(args[0], args[1:]...); err != nil {
+			panic(err)
+		}
+
+		if err := s.Loop(); err != nil {
+			panic(err)
+		}
 	},
 }
 
 var join = &cobra.Command{
-	Use:   "join [flags] [command [args ...]]",
+	Use:   "join [flags] command [args ...]",
 	Short: "Join a connection initialized by a peer",
-	Args:  cobra.ArbitraryArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: Implement
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		var params = session.Params{}
 
-		var err error
-		var ccmd *exec.Cmd
+		signal := signaling.NewCommandTransport[session.Description](sign)
 
-		if len(args) > 0 {
-			ccmd = exec.Command(args[0])
-		} else {
-			ccmd = exec.Command("cat")
-		}
+		s := session.NewSession(params)
+		defer s.Close()
 
-		sig := signaling.NewCommandTransport("./builtin-signaling-helpers/editor")
-		signals := make(chan webrtc.SessionDescription)
-
-		go connection.Join(ccmd, params, signals)
-
-		answer, err := sig.Receive()
+		offer, err := signal.Receive()
 		if err != nil {
-			return err
+			panic(err)
 		}
 
-		signals <- *answer
-
-		offer := <-signals
-
-		err = sig.Send(&offer)
+		answer, err := s.Join(*offer)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
-		// TODO: Synchronize?
+		if err := signal.Send(*answer); err != nil {
+			panic(err)
+		}
 
-		select {} // block
+		// TODO: Signal readiness
 
-		// return nil
+		if err := s.Attach(args[0], args[1:]...); err != nil {
+			panic(err)
+		}
+
+		if err := s.Loop(); err != nil {
+			panic(err)
+		}
 	},
 }
 
@@ -108,9 +101,8 @@ var web = &cobra.Command{
 	Use:   "web [flags]",
 	Short: "Open a web interface",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: Implement
-		return nil
 	},
 }
 
@@ -123,7 +115,12 @@ func init() {
 	// TODO: Default to true if we are running from a script (no tty)?
 	cmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "be quiet, do not output status and progress messages")
 
-	web.Flags().Uint16VarP(&port, "port", "p", 8000, "port to listen on")
+	for _, c := range []*cobra.Command{initialize, join} {
+		// TODO: Specify signaling command (path) in a more suitable way
+		c.Flags().StringVarP(&sign, "sign", "s", sign, "signaling transport to use")
+	}
+
+	web.Flags().Uint16VarP(&port, "port", "p", port, "port to listen on")
 
 	cmd.AddCommand(initialize)
 	cmd.AddCommand(join)
@@ -132,7 +129,6 @@ func init() {
 
 func Run() {
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "An error occurred: %v\n", err)
 		os.Exit(1)
 	}
 }

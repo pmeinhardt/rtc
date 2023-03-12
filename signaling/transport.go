@@ -2,82 +2,55 @@ package signaling
 
 import (
 	"bytes"
-	"encoding/json"
 	"os/exec"
-
-	"github.com/pion/webrtc/v3"
-	"github.com/tailscale/hujson"
 )
 
-func Marshal(value any) ([]byte, error) {
-	return json.Marshal(value)
+type Transport[Signal any] interface {
+	Receive() (*Signal, error)
+	Send(signal Signal) error
 }
 
-func Unmarshal(data []byte, value any) error {
-	bytes, err := hujson.Standardize(data)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(bytes, value)
+type CommandTransport[Signal any] struct {
+	Path string
 }
 
-type Transport interface {
-	Receive() (*webrtc.SessionDescription, error)
-	Send(desc *webrtc.SessionDescription) error
+func NewCommandTransport[Signal any](path string) Transport[Signal] {
+	return &CommandTransport[Signal]{path}
 }
 
-type CommandTransport struct {
-	cmd string
-}
+func (t *CommandTransport[Signal]) Receive() (*Signal, error) {
+	var stdout bytes.Buffer
 
-func (t *CommandTransport) Receive() (*webrtc.SessionDescription, error) {
-	var stdout, stderr bytes.Buffer
-
-	cmd := exec.Command(t.cmd, "recv")
+	cmd := exec.Command(t.Path, "recv")
 
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = nil
 
 	if err := cmd.Run(); err != nil {
 		return nil, err
 	}
 
-	desc := webrtc.SessionDescription{}
+	var signal Signal
+	data := stdout.Bytes()
 
-	if err := Unmarshal(stdout.Bytes(), &desc); err != nil {
+	if err := Unmarshal(data, &signal); err != nil {
 		return nil, err
 	}
 
-	return &desc, nil
+	return &signal, nil
 }
 
-func (t *CommandTransport) Send(desc *webrtc.SessionDescription) error {
-	var stdout, stderr bytes.Buffer
-
-	cmd := exec.Command(t.cmd, "send")
-
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	stdin, err := cmd.StdinPipe()
+func (t *CommandTransport[Signal]) Send(signal Signal) error {
+	data, err := Marshal(signal)
 	if err != nil {
 		return err
 	}
 
-	data, err := Marshal(desc)
-	if err != nil {
-		return err
-	}
+	cmd := exec.Command(t.Path, "send")
 
-	go func() {
-		defer stdin.Close()
-		stdin.Write(data)
-	}()
+	cmd.Stdin = bytes.NewBuffer(data)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 
 	return cmd.Run()
-}
-
-func NewCommandTransport(cmd string) Transport {
-	return &CommandTransport{cmd}
 }
