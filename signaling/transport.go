@@ -6,7 +6,21 @@ import (
 	"os/exec"
 
 	"github.com/pion/webrtc/v3"
+	"github.com/tailscale/hujson"
 )
+
+func Marshal(value any) ([]byte, error) {
+	return json.Marshal(value)
+}
+
+func Unmarshal(data []byte, value any) error {
+	bytes, err := hujson.Standardize(data)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(bytes, value)
+}
 
 type Transport interface {
 	Receive() (*webrtc.SessionDescription, error)
@@ -31,7 +45,7 @@ func (t *CommandTransport) Receive() (*webrtc.SessionDescription, error) {
 
 	desc := webrtc.SessionDescription{}
 
-	if err := json.Unmarshal(stdout.Bytes(), &desc); err != nil {
+	if err := Unmarshal(stdout.Bytes(), &desc); err != nil {
 		return nil, err
 	}
 
@@ -51,7 +65,7 @@ func (t *CommandTransport) Send(desc *webrtc.SessionDescription) error {
 		return err
 	}
 
-	data, err := json.Marshal(desc)
+	data, err := Marshal(desc)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-usage="Usage: tty <send|recv>"
+usage="Usage: editor <send|recv>"
 
 if [ $# -lt 1 ]; then
   echo "$usage"
@@ -13,12 +13,14 @@ fi
 
 case "$1" in
   send)
-    tmp=$(mktemp)
+    tmp=$(mktemp 2> /dev/tty)
+    mv "$tmp" "$tmp.jsonc"
+    tmp="$tmp.jsonc"
 
     {
-      printf "Copy this value and send it to your peer over a secure channel:\n\n"
+      printf "// Copy this value and send it to your peer over a secure channel:\n\n"
       cat -
-      printf "\n\nThen close the editor."
+      printf "\n\n// Then close the editor.\n"
     } > "$tmp"
 
     $EDITOR "$tmp" < /dev/tty &> /dev/tty || exit "$?"
@@ -26,10 +28,15 @@ case "$1" in
     rm "$tmp"
     ;;
   recv)
-    tmp=$(mktemp)
-    printf "Paste the received value here, then save and close the editor." > "$tmp"
+    tmp=$(mktemp 2> /dev/tty)
+    mv "$tmp" "$tmp.jsonc"
+    tmp="$tmp.jsonc"
+
+    printf "// Paste the received value here, then save and close the editor.\n" > "$tmp"
     $EDITOR "$tmp" < /dev/tty &> /dev/tty
+
     cat "$tmp"
+
     rm "$tmp"
     ;;
   *)
