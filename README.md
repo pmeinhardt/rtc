@@ -53,8 +53,8 @@ signal recv > sdp # receive SDP and print to stdout
 
 ## Ideas
 
-- [ ] Exchange SDP offer/answer via SMS, Signal, Slack, email, …
 - [ ] Adapter for exchanging session info based on GitHub user names (encrypt SDP via SSH public key + signing)
+- [ ] Keybase looks like it would be a great fit: Holds pub keys and encrypts messages for specific user, identified by name and with proof of GitHub, Twitter… accounts
 - [ ] Web-client interface (static HTML + JS) for non-technical users (send and or receive)
 
 ## References
