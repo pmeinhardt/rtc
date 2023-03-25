@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage="Usage: $(basename "$0") <send|recv>"
+
+if [ $# -lt 1 ]; then
+  echo "$usage"
+  exit 1
+fi
+
+function urlquote {
+  python3 -c "import sys; import urllib.parse as u; print(u.quote(sys.argv[1]))" "$1"
+}
+
+case "$1" in
+  send)
+    sdp=$(cat -)
+    subject=$(urlquote "Join me for a remote session")
+    body=$(urlquote "$sdp")
+    open "mailto:?subject=$subject&body=$body"
+    ;;
+  recv)
+    dir=$(dirname "$0")
+    "$dir/editor" recv
+    ;;
+  *)
+    echo "$usage"
+    exit 1
+    ;;
+esac
