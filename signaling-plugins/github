@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage="Usage: $(basename "$0") <send|recv|init>"
+
+if [ $# -lt 1 ]; then
+  echo "$usage"
+  exit 1
+fi
+
+prefix="$HOME/.rtc"
+
+# Get our GitHub username
+me=$(gh api user -q .login)
+
+function init {
+  mkdir "$prefix"
+  cd "$prefix"
+
+  # Use OpenSSL from Homebrew rather than macOS (which does not support ed25519)
+  # TODO: Detect whether openssl in PATH supports ed25519 or not, find a reliable, more platform-independent solution.
+  export PATH="$HOMEBREW_PREFIX/opt/openssl@3/bin:$PATH"
+
+  # Generate a keypair
+  # TODO: Let user set a password for private key?
+  openssl genpkey -algorithm ed25519 -out key
+  openssl pkey -in key -pubout -out key.pub
+
+  mkdir repo && git -C repo init
+  git -C repo checkout -b main && git -C repo add key.pub && git -C repo commit -m "."
+  cp key.pub repo
+
+  gh repo create "$me/rtc-signals" \
+    --public \
+    --description "testing" \
+    --disable-issues \
+    --disable-wiki \
+    --source repo
+
+  git -C repo push --set-upstream origin main
+}
+
+case "$1" in
+  send)
+    ;;
+  recv)
+    ;;
+  init)
+    init
+    ;;
+  *)
+    echo "$usage"
+    exit 1
+    ;;
+esac
