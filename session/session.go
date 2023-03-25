@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -17,9 +18,9 @@ type Params struct {
 
 type Description webrtc.SessionDescription
 
-type Msg []byte
-
 type Event interface{}
+
+type Msg []byte
 
 type Session struct {
 	ctx    context.Context
@@ -27,11 +28,10 @@ type Session struct {
 
 	params Params
 
+	events chan Event
+
 	incoming chan Msg
 	outgoing chan Msg
-
-	events chan Event
-	errors chan error
 
 	pc *webrtc.PeerConnection
 	dc *webrtc.DataChannel
@@ -39,13 +39,22 @@ type Session struct {
 
 type (
 	ConnectionStateChangeEvent struct{ state webrtc.PeerConnectionState }
+	ConnectionDataChannelEvent struct{ dc *webrtc.DataChannel }
 
-	ChannelDialEvent              struct{}
-	ChannelOpenEvent              struct{}
-	ChannelCloseEvent             struct{}
-	ChannelErrorEvent             struct{ err error }
-	ChannelBufferedAmountLowEvent struct{}
-	ChannelMessageEvent           struct{ msg webrtc.DataChannelMessage }
+	ChannelDialEvent              struct{ dc *webrtc.DataChannel }
+	ChannelOpenEvent              struct{ dc *webrtc.DataChannel }
+	ChannelCloseEvent             struct{ dc *webrtc.DataChannel }
+	ChannelBufferedAmountLowEvent struct{ dc *webrtc.DataChannel }
+
+	ChannelMessageEvent struct {
+		dc  *webrtc.DataChannel
+		msg webrtc.DataChannelMessage
+	}
+
+	ChannelErrorEvent struct {
+		dc  *webrtc.DataChannel
+		err error
+	}
 
 	CloseEvent struct{}
 )
@@ -53,10 +62,11 @@ type (
 const DataChannelLabel = "data"
 
 var (
-	ErrNoICECandidate   = errors.New("no ICE candidate")
+	ErrNoICECandidates  = errors.New("no ICE candidates")
 	ErrConnectionFailed = errors.New("connection failed")
 	ErrChannelClosed    = errors.New("channel closed")
-	ErrClosed           = errors.New("closed")
+	Closed              = errors.New("closed")
+	done                = errors.New("done")
 )
 
 func WithDefaults(params Params) Params {
@@ -71,7 +81,7 @@ func WithDefaults(params Params) Params {
 	return params
 }
 
-func NewSession(params Params) *Session {
+func New(params Params) *Session {
 	params = WithDefaults(params)
 
 	ctx, cancel := context.WithCancelCause(params.Context)
@@ -82,14 +92,19 @@ func NewSession(params Params) *Session {
 
 		params: params,
 
+		events: make(chan Event),
+
 		incoming: make(chan Msg),
 		outgoing: make(chan Msg),
-
-		events: make(chan Event),
-		errors: make(chan error),
 	}
 
 	return s
+}
+
+func assert(cond bool, msg string) {
+	if !cond {
+		panic(errors.New(msg))
+	}
 }
 
 func config(params Params) webrtc.Configuration {
@@ -100,7 +115,7 @@ func config(params Params) webrtc.Configuration {
 
 func check(desc *webrtc.SessionDescription) error {
 	if !strings.Contains(desc.SDP, "\na=candidate:") {
-		return ErrNoICECandidate
+		return ErrNoICECandidates
 	}
 
 	return nil
@@ -108,6 +123,7 @@ func check(desc *webrtc.SessionDescription) error {
 
 func (s *Session) Initiate() (*Description, error) {
 	// Initialize a new peer connection and data channel.
+
 	pc, err := webrtc.NewPeerConnection(config(s.params))
 	if err != nil {
 		return nil, err
@@ -146,7 +162,11 @@ func (s *Session) Initiate() (*Description, error) {
 
 	// Block until ICE Gathering is complete, not using trickle ICE.
 	// We do this because we only want to exchange one signaling message.
-	<-gathered
+	select {
+	case <-s.ctx.Done():
+		return nil, context.Cause(s.ctx)
+	case <-gathered:
+	}
 
 	// Compute the local offer again. This second offer contains all found
 	// candidates, and may be sent to the peer with no need for further
@@ -179,8 +199,9 @@ func (s *Session) Join(desc Description) (*Description, error) {
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		if dc.Label() == DataChannelLabel {
-			s.subscribe(dc)
+		select {
+		case <-s.ctx.Done():
+		case s.events <- ConnectionDataChannelEvent{dc}:
 		}
 	})
 
@@ -206,7 +227,11 @@ func (s *Session) Join(desc Description) (*Description, error) {
 
 	// Block until ICE Gathering is complete, not using trickle ICE.
 	// We do this because we only want to exchange one signaling message.
-	<-gathered
+	select {
+	case <-s.ctx.Done():
+		return nil, context.Cause(s.ctx)
+	case <-gathered:
+	}
 
 	// Compute the local answer again. This second answer contains all found
 	// candidates, and may be sent to the peer with no need for further
@@ -222,69 +247,88 @@ func (s *Session) Join(desc Description) (*Description, error) {
 }
 
 func (s *Session) Accept(desc Description) error {
-	return s.pc.SetRemoteDescription(webrtc.SessionDescription(desc))
+	select {
+	case <-s.ctx.Done():
+		return context.Cause(s.ctx)
+	default:
+		return s.pc.SetRemoteDescription(webrtc.SessionDescription(desc))
+	}
 }
 
 func (s *Session) subscribe(dc *webrtc.DataChannel) {
+	assert(dc.Ordered(), "channel not ordered")
+	assert(dc.MaxPacketLifeTime() == nil, "channel packet lifetime limited")
+	assert(dc.MaxRetransmits() == nil, "channel retransmits limited")
+
 	s.dc = dc
 
 	dc.OnBufferedAmountLow(func() {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelBufferedAmountLowEvent{}:
+		case s.events <- ChannelBufferedAmountLowEvent{dc}:
 		}
 	})
 	dc.OnClose(func() {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelCloseEvent{}:
+		case s.events <- ChannelCloseEvent{dc}:
 		}
 	})
 	dc.OnDial(func() {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelDialEvent{}:
+		case s.events <- ChannelDialEvent{dc}:
 		}
 	})
 	dc.OnError(func(err error) {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelErrorEvent{err}:
+		case s.events <- ChannelErrorEvent{dc, err}:
 		}
 	})
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelMessageEvent{msg}:
-		}
-
-		select {
-		case <-s.ctx.Done():
-		case s.incoming <- msg.Data:
+		case s.events <- ChannelMessageEvent{dc, msg}:
 		}
 	})
 	dc.OnOpen(func() {
 		select {
 		case <-s.ctx.Done():
-		case s.events <- ChannelOpenEvent{}:
+		case s.events <- ChannelOpenEvent{dc}:
 		}
 	})
 }
 
-func (s *Session) Attach(path string, args ...string) error {
-	cmd := exec.CommandContext(s.ctx, path, args...)
+func (s *Session) unsubscribe() {
+	dc := s.dc
+	if dc == nil {
+		return
+	}
+
+	dc.OnBufferedAmountLow(nil)
+	dc.OnClose(nil)
+	dc.OnDial(nil)
+	dc.OnError(nil)
+	dc.OnMessage(nil)
+	dc.OnOpen(nil)
+
+	s.dc = nil
+}
+
+func (s *Session) Run(path string, args ...string) error {
+	ctx, cancel := context.WithCancelCause(s.ctx)
+	cmd := exec.CommandContext(ctx, path, args...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		cancel(err)
 		return err
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
+		cancel(err)
 		return err
 	}
 
@@ -296,25 +340,24 @@ func (s *Session) Attach(path string, args ...string) error {
 
 		for {
 			select {
-			case <-s.ctx.Done():
-				if err := stdout.Close(); err != nil {
-					s.errors <- err
-				}
-
+			case <-ctx.Done():
 				return
 			default:
 				n, err := stdout.Read(buffer)
 				if err != nil {
-					if err == io.EOF {
-						s.errors <- ErrClosed
+					if err != io.EOF {
+						cancel(err)
 					} else {
-						s.errors <- err
+						cancel(done)
 					}
-					return
+
+					continue
 				}
 
 				if n > 0 {
-					s.Send(buffer[:n])
+					if err := s.Write(buffer[:n]); err != nil {
+						cancel(err)
+					}
 				}
 			}
 		}
@@ -325,41 +368,38 @@ func (s *Session) Attach(path string, args ...string) error {
 
 		for {
 			select {
-			case <-s.ctx.Done():
-				if err := stdin.Close(); err != nil {
-					s.errors <- err
-				}
-
+			case <-ctx.Done():
 				return
 			default:
-				buffer := s.Read()
-				_, err := stdin.Write(buffer)
+				buffer, err := s.Read()
 				if err != nil {
-					s.errors <- err
-					return
+					cancel(err)
+				}
+
+				_, err = stdin.Write(buffer)
+				if err != nil {
+					cancel(err)
 				}
 			}
 		}
 	}()
 
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			s.errors <- err
-		}
-	}()
+	if err := cmd.Run(); err != nil {
+		cancel(err)
+	} else {
+		cancel(done)
+	}
+
+	if err := context.Cause(ctx); err != done {
+		return err
+	}
 
 	return nil
 }
 
 func (s *Session) Loop() error {
 	err := s.loop()
-
-	if errors.Is(err, ErrClosed) {
-		err = nil
-	}
-
 	s.shutdown()
-
 	return err
 }
 
@@ -367,46 +407,64 @@ func (s *Session) loop() error {
 	for {
 		select {
 		case <-s.ctx.Done():
-			err := context.Cause(s.ctx)
-			return err
-		case err := <-s.errors:
-			s.cancel(err)
+			if err := context.Cause(s.ctx); err != Closed {
+				return err
+			}
+			return nil
 		case evt := <-s.events:
 			switch evt := evt.(type) {
 			case CloseEvent:
-				s.errors <- ErrClosed
+				s.cancel(Closed)
 			case ConnectionStateChangeEvent:
 				if evt.state == webrtc.PeerConnectionStateFailed {
-					s.errors <- ErrConnectionFailed
+					s.cancel(ErrConnectionFailed)
 				}
+			case ConnectionDataChannelEvent:
+				if evt.dc.Label() == DataChannelLabel {
+					s.subscribe(evt.dc)
+				}
+			case ChannelBufferedAmountLowEvent:
+				continue
 			case ChannelCloseEvent:
-				s.errors <- ErrChannelClosed
+				s.cancel(ErrChannelClosed)
+			case ChannelDialEvent:
+				continue
 			case ChannelErrorEvent:
-				s.errors <- evt.err
+				s.cancel(evt.err)
+			case ChannelOpenEvent:
+				continue
+			case ChannelMessageEvent:
+				s.incoming <- evt.msg.Data // this can block, be sure to read
 			default:
-				// ?
+				msg := fmt.Sprintf("unhandled event: %v", evt)
+				panic(errors.New(msg))
 			}
 		case b := <-s.outgoing:
-			// TODO: Split message or, alternatively, error on message larger than max
-
-			// caps := s.pc.SCTP().GetCapabilities()
-			// max := caps.MaxMessageSize
-
 			if err := s.dc.Send(b); err != nil {
-				s.errors <- err
+				s.cancel(err)
 			}
 		}
 	}
 }
 
 func (s *Session) shutdown() {
-	// s.dc.Close()
-	// s.pc.Close()
+	s.unsubscribe()
+
+	// TODO:
+	// If we don't see connection/channel here, could they be assigned later,
+	// after we've checked them, and leak? Seems unlikely but possible.
+
+	if s.dc != nil {
+		s.dc.Close()
+	}
+
+	if s.pc != nil {
+		s.pc.Close()
+	}
 
 	for {
 		select {
 		case <-s.events:
-		case <-s.errors:
 		case <-s.incoming:
 		case <-s.outgoing:
 		default:
@@ -415,25 +473,33 @@ func (s *Session) shutdown() {
 	}
 }
 
-func (s *Session) Read() []byte {
+func (s *Session) Read() ([]byte, error) {
 	select {
 	case <-s.ctx.Done():
-		return []byte{}
+		return nil, context.Cause(s.ctx)
 	case p := <-s.incoming:
-		return p
+		return p, nil
 	}
 }
 
-func (s *Session) Send(p []byte) {
+func (s *Session) Write(p []byte) error {
 	select {
 	case <-s.ctx.Done():
+		return context.Cause(s.ctx)
 	case s.outgoing <- p:
+		return nil
 	}
 }
 
-func (s *Session) Close() {
-	select {
-	case <-s.ctx.Done():
-	case s.events <- CloseEvent{}:
+func (s *Session) Close() error {
+	for {
+		select {
+		case <-s.ctx.Done():
+			if err := context.Cause(s.ctx); err != Closed {
+				return err
+			}
+			return nil
+		case s.events <- CloseEvent{}:
+		}
 	}
 }

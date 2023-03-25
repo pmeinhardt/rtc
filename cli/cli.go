@@ -28,8 +28,9 @@ var initialize = &cobra.Command{
 
 		signal := signaling.NewCommandTransport[session.Description](sign)
 
-		s := session.NewSession(params)
+		s := session.New(params)
 		defer s.Close()
+		go s.Loop()
 
 		offer, err := s.Initiate()
 		if err != nil {
@@ -52,11 +53,11 @@ var initialize = &cobra.Command{
 		// TODO: Synchronize and do not write before peer signal.Send has finished/peer is attached
 		// Peer needs to signal readiness
 
-		if err := s.Attach(args[0], args[1:]...); err != nil {
+		if err := s.Run(args[0], args[1:]...); err != nil {
 			logger.Fatalln(err)
 		}
 
-		if err := s.Loop(); err != nil {
+		if err := s.Close(); err != nil {
 			logger.Fatalln(err)
 		}
 	},
@@ -71,8 +72,9 @@ var join = &cobra.Command{
 
 		signal := signaling.NewCommandTransport[session.Description](sign)
 
-		s := session.NewSession(params)
+		s := session.New(params)
 		defer s.Close()
+		go s.Loop()
 
 		offer, err := signal.Receive()
 		if err != nil {
@@ -88,13 +90,13 @@ var join = &cobra.Command{
 			logger.Fatalln(err)
 		}
 
-		// TODO: Signal readiness
+		// TODO: Signal readiness and wait for peer to acknowledge
 
-		if err := s.Attach(args[0], args[1:]...); err != nil {
+		if err := s.Run(args[0], args[1:]...); err != nil {
 			logger.Fatalln(err)
 		}
 
-		if err := s.Loop(); err != nil {
+		if err := s.Close(); err != nil {
 			logger.Fatalln(err)
 		}
 	},
