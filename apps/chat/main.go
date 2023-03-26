@@ -15,13 +15,23 @@ import (
 )
 
 func main() {
+	log.SetFlags(0)
+
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0644)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	p := tea.NewProgram(initialModel(), tea.WithInput(tty), tea.WithOutput(tty))
 	lipgloss.SetColorProfile(termenv.NewOutput(tty).EnvColorProfile())
+
+	opts := []tea.ProgramOption{
+		tea.WithInput(tty),
+		tea.WithOutput(tty),
+		tea.WithAltScreen(),
+	}
+
+	p := tea.NewProgram(initialModel(), opts...)
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -127,7 +137,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			os.Stdout.WriteString(fmt.Sprintf("%v\n", message))
 
-			m.messages = append(m.messages, senderStyle.Render("You: ")+message)
+			m.messages = append(m.messages, senderStyle.Render("You:  ")+message)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
