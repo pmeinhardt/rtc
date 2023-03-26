@@ -20,7 +20,7 @@ var (
 var logger = log.New(os.Stderr, "", 0)
 
 var initialize = &cobra.Command{
-	Use:   "init [flags] command [args ...]",
+	Use:   "init [flags] COMMAND [ARG ...]",
 	Short: "Set up a new peer connection",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -64,7 +64,7 @@ var initialize = &cobra.Command{
 }
 
 var join = &cobra.Command{
-	Use:   "join [flags] command [args ...]",
+	Use:   "join [flags] COMMAND [ARG ...]",
 	Short: "Join a connection initialized by a peer",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {

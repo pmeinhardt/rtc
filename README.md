@@ -17,9 +17,9 @@ TODO: What about app stderr?
 ## Usage
 
 ```shell
-rtc init [command [arg ...]]
-rtc join [command [arg ...]]
-rtc web
+rtc init [flags] COMMAND [ARG ...]
+rtc join [flags] COMMAND [ARG ...]
+rtc web [flags]
 ```
 
 ## Apps
