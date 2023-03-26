@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"log"
 	"os"
 
 	"github.com/pmeinhardt/rtc/session"
@@ -16,6 +17,8 @@ var (
 	quiet bool
 )
 
+var logger = log.New(os.Stderr, "", 0)
+
 var initialize = &cobra.Command{
 	Use:   "init [flags] command [args ...]",
 	Short: "Set up a new peer connection",
@@ -30,31 +33,31 @@ var initialize = &cobra.Command{
 
 		offer, err := s.Initiate()
 		if err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		if err := signal.Send(*offer); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		answer, err := signal.Receive()
 		if err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		if err := s.Accept(*answer); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		// TODO: Synchronize and do not write before peer signal.Send has finished/peer is attached
 		// Peer needs to signal readiness
 
 		if err := s.Attach(args[0], args[1:]...); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		if err := s.Loop(); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 	},
 }
@@ -73,26 +76,26 @@ var join = &cobra.Command{
 
 		offer, err := signal.Receive()
 		if err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		answer, err := s.Join(*offer)
 		if err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		if err := signal.Send(*answer); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		// TODO: Signal readiness
 
 		if err := s.Attach(args[0], args[1:]...); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 
 		if err := s.Loop(); err != nil {
-			panic(err)
+			logger.Fatalln(err)
 		}
 	},
 }
@@ -116,7 +119,7 @@ func init() {
 	cmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "be quiet, do not output status and progress messages")
 
 	for _, c := range []*cobra.Command{initialize, join} {
-		// TODO: Specify signaling command (path) in a more suitable way
+		// TODO: Specify signaling command (path, args…) in a more suitable way
 		c.Flags().StringVarP(&sign, "sign", "s", sign, "signaling transport to use")
 	}
 
