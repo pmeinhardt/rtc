@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	sign         = "./signaling-plugins/editor"
+	sign         = []string{"./signaling-plugins/editor"}
 	port  uint16 = 8000
 	quiet bool
 )
@@ -26,7 +26,7 @@ var initialize = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var params = session.Params{}
 
-		signal := signaling.NewCommandTransport[session.Description](sign)
+		signal := signaling.NewCommandTransport[session.Description](sign[0], sign[1:]...)
 
 		s := session.New(params)
 		defer s.Close()
@@ -70,7 +70,7 @@ var join = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var params = session.Params{}
 
-		signal := signaling.NewCommandTransport[session.Description](sign)
+		signal := signaling.NewCommandTransport[session.Description](sign[0], sign[1:]...)
 
 		s := session.New(params)
 		defer s.Close()
@@ -122,7 +122,7 @@ func init() {
 
 	for _, c := range []*cobra.Command{initialize, join} {
 		// TODO: Specify signaling command (path, args…) in a more suitable way
-		c.Flags().StringVarP(&sign, "sign", "s", sign, "signaling transport to use")
+		c.Flags().StringArrayVarP(&sign, "sign", "s", sign, "signaling transport to use")
 	}
 
 	web.Flags().Uint16VarP(&port, "port", "p", port, "port to listen on")

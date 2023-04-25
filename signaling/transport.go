@@ -14,7 +14,7 @@ type CommandTransport[Signal any] struct {
 	Path string
 }
 
-func NewCommandTransport[Signal any](path string) Transport[Signal] {
+func NewCommandTransport[Signal any](path string, arg ...string) Transport[Signal] {
 	return &CommandTransport[Signal]{path}
 }
 
