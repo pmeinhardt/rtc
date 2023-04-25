@@ -12,16 +12,18 @@ type Transport[Signal any] interface {
 
 type CommandTransport[Signal any] struct {
 	Path string
+	Args []string
 }
 
 func NewCommandTransport[Signal any](path string, arg ...string) Transport[Signal] {
-	return &CommandTransport[Signal]{path}
+	return &CommandTransport[Signal]{path, arg}
 }
 
 func (t *CommandTransport[Signal]) Receive() (*Signal, error) {
 	var stdout bytes.Buffer
 
-	cmd := exec.Command(t.Path, "recv")
+	args := append(t.Args, "recv")
+	cmd := exec.Command(t.Path, args...)
 
 	cmd.Stdout = &stdout
 	cmd.Stderr = nil
@@ -46,7 +48,8 @@ func (t *CommandTransport[Signal]) Send(signal Signal) error {
 		return err
 	}
 
-	cmd := exec.Command(t.Path, "send")
+	args := append(t.Args, "send")
+	cmd := exec.Command(t.Path, args...)
 
 	cmd.Stdin = bytes.NewBuffer(data)
 	cmd.Stdout = nil
