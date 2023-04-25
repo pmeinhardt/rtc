@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+usage="Usage: $(basename "$0") <send|recv>"
+
+if [ $# -lt 1 ]; then
+  echo "$usage"
+  exit 1
+fi
+
+function quotestring {
+	echo "${1//\"/\\\"}"
+}
+
+case "$1" in
+	send)
+    sdp=$(cat -)
+		osascript <<-EOS
+			tell application "Mail"
+				set msg to make new outgoing message
+				set subject of msg to "Hello World"
+				make new recipient at end of to recipients of msg with properties {address:"@"}
+				set content of msg to "$(quotestring "$sdp")"
+				send msg
+			end tell
+		EOS
+		;;
+	recv)
+		osascript -e '
+			tell application "Mail"
+				set msgs to messages of inbox
+				set msg to item 1 of msgs
+				sender of msg & "\n" & content of msg
+			end tell
+		'
+		;;
+	*)
+		echo "$usage"
+		exit 1
+		;;
+esac
