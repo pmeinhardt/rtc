@@ -4,9 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-usage="Usage: $(basename "$0") <email-address> <send|recv>"
+usage="Usage: $(basename "$0") <from-email> <to-email> <send|recv>"
 
-if [ $# -lt 2 ]; then
+if [ $# -lt 3 ]; then
   echo "$usage"
   exit 1
 fi
@@ -15,15 +15,17 @@ function quotestring {
 	echo "${1//\"/\\\"}"
 }
 
-email="$1"
+from="$1"
+email="$2"
 
-case "$2" in
+case "$3" in
 	send)
     sdp=$(cat -)
 		osascript <<-EOS
 			tell application "Mail"
 				set msg to make new outgoing message
-				set subject of msg to "Hello World"
+				set sender of msg to "$from"
+				set subject of msg to "rtc connection details"
 				make new recipient at end of to recipients of msg with properties {address:"$email"}
 				set content of msg to "$(quotestring "$sdp")"
 				send msg
