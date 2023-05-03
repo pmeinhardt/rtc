@@ -48,25 +48,26 @@ case "$action" in
 		sdp=""
 
 		while [ -z "$sdp" ]; do
-			tmp=$(osascript -e '
-				tell application "Mail"
+			sdp=$(osascript -e "
+				tell application \"Mail\"
 					set msgs to messages of inbox
 					set msg to item 1 of msgs
-					sender of msg & "\n" & content of msg
+					set addr to sender of msg
+					set rdst to read status of msg
+
+					if (not rdst) and (addr is equal to \"$to\") then
+						set read status of msg to true
+						content of msg
+					end if
 				end tell
-			')
+			")
 
-			sender=$(echo "$tmp" | head -n 1)
-			msg=$(echo "$tmp" | sed '/^$/d' | tail -n +2)
-
-			if [[ "$sender" == *"$to"* ]]; then
-				sdp="${msg//$'\n'/\\n}"
-			else
+			if [ -z "$sdp" ]; then
 				sleep 5
 			fi
 		done
 
-		echo "$sdp"
+		echo "${sdp//$'\n'/\\n}"
 		;;
 	*)
 		echo "$usage"
