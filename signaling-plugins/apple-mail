@@ -43,10 +43,10 @@ case "$2" in
 			')
 
 			sender=$(echo "$tmp" | head -n 1)
-			msg=$(echo "$tmp" | tail -n +2)
+			msg=$(echo "$tmp" | sed '/^$/d' | tail -n +2)
 
 			if [[ "$sender" == *"$email"* ]]; then
-				sdp="$msg"
+				sdp="${msg//$'\n'/\\n}"
 			else
 				sleep 1
 			fi
