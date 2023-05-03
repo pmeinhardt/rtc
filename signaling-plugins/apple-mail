@@ -4,29 +4,41 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-usage="Usage: $(basename "$0") <from-email> <to-email> <send|recv>"
+usage="Usage: $(basename "$0") [<from-email>] <to-email> <send|recv>"
 
-if [ $# -lt 3 ]; then
+from=""
+to=""
+action=""
+
+if [ $# -lt 2 ]; then
   echo "$usage"
   exit 1
+elif [ $# -eq 2 ]; then
+	to="$1"
+	action="$2"
+else
+	from="$1"
+	to="$2"
+	action="$3"
 fi
 
 function quotestring {
 	echo "${1//\"/\\\"}"
 }
 
-from="$1"
-email="$2"
-
-case "$3" in
+case "$action" in
 	send)
     sdp=$(cat -)
 		osascript <<-EOS
 			tell application "Mail"
 				set msg to make new outgoing message
-				set sender of msg to "$from"
+
+				if "$from" is not equal to "" then
+					set sender of msg to "$from"
+				end if
+
 				set subject of msg to "rtc connection details"
-				make new recipient at end of to recipients of msg with properties {address:"$email"}
+				make new recipient at end of to recipients of msg with properties {address:"$to"}
 				set content of msg to "$(quotestring "$sdp")"
 				send msg
 			end tell
@@ -47,7 +59,7 @@ case "$3" in
 			sender=$(echo "$tmp" | head -n 1)
 			msg=$(echo "$tmp" | sed '/^$/d' | tail -n +2)
 
-			if [[ "$sender" == *"$email"* ]]; then
+			if [[ "$sender" == *"$to"* ]]; then
 				sdp="${msg//$'\n'/\\n}"
 			else
 				sleep 1
