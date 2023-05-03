@@ -14,63 +14,64 @@ if [ $# -lt 2 ]; then
   echo "$usage"
   exit 1
 elif [ $# -eq 2 ]; then
-	to="$1"
-	action="$2"
+  to="$1"
+  action="$2"
 else
-	from="$1"
-	to="$2"
-	action="$3"
+  from="$1"
+  to="$2"
+  action="$3"
 fi
 
 function quotestring {
-	echo "${1//\"/\\\"}"
+  echo "${1//\"/\\\"}"
 }
 
 case "$action" in
-	send)
+  send)
     sdp=$(cat -)
-		osascript <<-EOS
-			tell application "Mail"
-				set msg to make new outgoing message
+    osascript <<-EOS
+      tell application "Mail"
+        set msg to make new outgoing message
 
-				if "$from" is not equal to "" then
-					set sender of msg to "$from"
-				end if
+        if "$from" is not equal to "" then
+          set sender of msg to "$from"
+        end if
 
-				set subject of msg to "rtc connection details"
-				make new recipient at end of to recipients of msg with properties {address:"$to"}
-				set content of msg to "$(quotestring "$sdp")"
-				send msg
-			end tell
-		EOS
-		;;
-	recv)
-		sdp=""
+        set subject of msg to "rtc connection details"
+        make new recipient at end of to recipients of msg with properties {address:"$to"}
+        set content of msg to "$(quotestring "$sdp")"
+        send msg
+      end tell
+    EOS
+    ;;
+  recv)
+    sdp=""
 
-		while [ -z "$sdp" ]; do
-			sdp=$(osascript -e "
-				tell application \"Mail\"
-					set msgs to messages of inbox
-					set msg to item 1 of msgs
-					set addr to sender of msg
-					set rdst to read status of msg
+    while [ -z "$sdp" ]; do
+      sdp=$(osascript -e "
+        tell application \"Mail\"
+          set msgs to messages of inbox
+          set msg to item 1 of msgs
+          set addr to sender of msg
+          set rdst to read status of msg
 
-					if (not rdst) and (addr is equal to \"$to\") then
-						set read status of msg to true
-						content of msg
-					end if
-				end tell
-			")
+          if (not rdst) and (addr contains \"$to\") then
+            set read status of msg to true
+            content of msg
+          end if
+        end tell
+      ")
 
-			if [ -z "$sdp" ]; then
-				sleep 5
-			fi
-		done
+      if [ -z "$sdp" ]; then
+        echo "$to"
+        sleep 5
+      fi
+    done
 
-		echo "${sdp//$'\n'/\\n}"
-		;;
-	*)
-		echo "$usage"
-		exit 1
-		;;
+    echo "${sdp//$'\n'/\\n}"
+    ;;
+  *)
+    echo "$usage"
+    exit 1
+    ;;
 esac
