@@ -51,6 +51,15 @@ signal send < sdp # send SDP received on stdin
 signal recv > sdp # receive SDP and print to stdout
 ```
 
+Example usage with `rtc` command:
+
+```shell
+rtc init -s ./signaling-plugins/apple-mail -s somebody@somewhere ./apps/chat/chat
+
+# on the other end
+rtc join -s ./signaling-plugins/apple-mail -s sender@elsewhere ./apps/chat/chat
+```
+
 ## Ideas
 
 - [ ] Adapter for exchanging session info based on GitHub user names (encrypt SDP via SSH public key + signing)
