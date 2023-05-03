@@ -74,3 +74,4 @@ rtc join -s ./signaling-plugins/apple-mail -s sender@elsewhere ./apps/chat/chat
 - https://en.wikipedia.org/wiki/Stream_Control_Transmission_Protocol
 - https://en.wikipedia.org/wiki/Datagram_Transport_Layer_Security
 - https://github.com/pion
+- https://webrtcforthecurious.com/
