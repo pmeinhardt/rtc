@@ -65,6 +65,7 @@ rtc join -s ./signaling-plugins/apple-mail -s sender@elsewhere ./apps/chat/chat
 - [ ] Adapter for exchanging session info based on GitHub user names (encrypt SDP via SSH public key + signing)
 - [ ] Keybase looks like it would be a great fit: Holds pub keys and encrypts messages for specific user, identified by name and with proof of GitHub, Twitter… accounts
 - [ ] Web-client interface (static HTML + JS) for non-technical users (send and or receive)
+- [ ] For frequently used connections, use sth. like `alias talktoxy='rtc init … ./apps/chat/chat'`
 
 ## References
 
