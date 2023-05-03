@@ -62,7 +62,7 @@ case "$action" in
 			if [[ "$sender" == *"$to"* ]]; then
 				sdp="${msg//$'\n'/\\n}"
 			else
-				sleep 1
+				sleep 5
 			fi
 		done
 
